@@ -99,9 +99,10 @@ def load_pdf(file_path: str | Path) -> List[Tuple[int, str]]:
 
     # ── 4. Extract text page by page ─────────────────────────────────────────
     pages: List[Tuple[int, str]] = []
+    total_pages = len(doc)  # save BEFORE closing — len(doc) returns '?' after close
 
     try:
-        for page_index in range(len(doc)):
+        for page_index in range(total_pages):
             page = doc.load_page(page_index)
 
             # get_text("text") extracts the text layer only (no images).
@@ -136,6 +137,6 @@ def load_pdf(file_path: str | Path) -> List[Tuple[int, str]]:
         "Loaded '%s': %d pages with text (out of %d total).",
         path.name,
         len(pages),
-        len(doc) if not doc.is_closed else "?",
+        total_pages,
     )
     return pages
