@@ -36,7 +36,7 @@ import streamlit as st
 from ingestion.loader import load_pdf
 from ingestion.chunker import chunk_documents
 from ingestion.embedder import embed_and_store, get_collection_count
-from retrieval.retriever import retrieve
+from retrieval.retriever import retrieve_hybrid
 from generation.llm_chain import generate_answer
 from utils.exceptions import (
     DocumentLoadError,
@@ -418,7 +418,7 @@ if question:
     # 2. Retrieve → Generate
     with st.spinner("🔍 Searching your documents..."):
         try:
-            chunks = retrieve(question, top_k=top_k)
+            chunks = retrieve_hybrid(question, top_k=top_k)
         except RetrievalError as e:
             st.error(f"Retrieval failed: {e}")
             chunks = []

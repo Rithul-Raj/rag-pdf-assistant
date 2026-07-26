@@ -349,3 +349,55 @@ def reset_collection() -> None:
         log.info("Collection '%s' reset.", config.chroma_collection_name)
     except Exception as exc:
         raise VectorStoreError(f"Failed to reset collection: {exc}") from exc
+
+
+def get_all_chunks() -> list[dict]:
+    """
+    Fetch every chunk stored in ChromaDB as a flat list of dicts.
+
+    WHY THIS IS NEEDED FOR BM25:
+      BM25 is a corpus-level algorithm — it needs to see ALL documents
+      to compute IDF (Inverse Document Frequency) scores correctly.
+      IDF = log(N / df) where N is total docs and df is how many docs
+      contain the term. Without all documents, IDF scores are wrong.
+
+      This is called once when the BM25 index is first built, then
+      cached in retriever.py. The index is rebuilt only when the chunk
+      count changes (i.e., new PDFs were uploaded).
+
+    Returns:
+        List of dicts, each with: text, source_file, page_number, chunk_id.
+        Empty list if the collection is empty.
+
+    Raises:
+        VectorStoreError: If ChromaDB cannot be read.
+    """
+    try:
+        collection = _get_collection()
+        count = collection.count()
+        if count == 0:
+            return []
+
+        # ChromaDB's .get() returns all items (up to limit).
+        # We don't need embeddings here — just text and metadata.
+        results = collection.get(
+            limit=count,
+            include=["documents", "metadatas"],
+        )
+
+        chunks = []
+        for doc, meta in zip(results["documents"], results["metadatas"]):
+            chunks.append(
+                {
+                    "text": doc,
+                    "source_file": meta.get("source_file", ""),
+                    "page_number": meta.get("page_number", 0),
+                    "chunk_id": meta.get("chunk_id", ""),
+                }
+            )
+        log.debug("Fetched %d chunks from ChromaDB for BM25 indexing.", len(chunks))
+        return chunks
+
+    except Exception as exc:
+        raise VectorStoreError(f"Failed to fetch all chunks: {exc}") from exc
+
