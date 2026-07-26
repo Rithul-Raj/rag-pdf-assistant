@@ -1,8 +1,9 @@
 # ── Secrets — NEVER commit these ─────────────────────────────────────────────
 .env
 
-# ── ChromaDB local persistence directory ─────────────────────────────────────
+# ── ChromaDB local persistence directories ───────────────────────────────────
 chroma_db/
+test_chroma_db/
 
 # ── Streamlit cache ───────────────────────────────────────────────────────────
 .streamlit/
