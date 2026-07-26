@@ -1,5 +1,10 @@
 # ── Secrets — NEVER commit these ─────────────────────────────────────────────
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
 
 # ── ChromaDB local persistence directories ───────────────────────────────────
 chroma_db/
