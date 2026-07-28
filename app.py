@@ -28,6 +28,23 @@ RUN THE APP:
   Then open http://localhost:8501 in your browser.
 """
 
+# ── Streamlit Cloud secrets → os.environ bridge ───────────────────────────────
+# On Streamlit Cloud, API keys are stored in st.secrets (set via the dashboard).
+# Our utils/config.py reads from os.environ via os.getenv().
+# This block copies st.secrets into os.environ BEFORE any RAG module is imported,
+# so config.py sees the correct values on first initialization.
+#
+# Locally: st.secrets is empty or doesn't exist — this block is a no-op.
+# On Streamlit Cloud: st.secrets contains GROQ_API_KEY etc. from the dashboard.
+import os
+try:
+    import streamlit as _st_bootstrap
+    for _k, _v in _st_bootstrap.secrets.items():
+        if _k not in os.environ:          # don't override .env values locally
+            os.environ[_k] = str(_v)
+except Exception:
+    pass  # running locally without secrets — config.py will read from .env
+
 import tempfile
 from pathlib import Path
 
