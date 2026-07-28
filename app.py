@@ -326,7 +326,7 @@ with st.sidebar:
     st.divider()
 
     # ── Retrieval Settings ────────────────────────────────────────────────────
-    st.markdown("## ⚙️ Settings")
+    st.markdown("##  Settings")
     top_k = st.slider(
         "Results to retrieve (top-k)",
         min_value=1, max_value=10, value=5,
@@ -337,7 +337,7 @@ with st.sidebar:
     st.divider()
 
     # ── Clear chat button ─────────────────────────────────────────────────────
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
+    if st.button(" Clear Chat History", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -386,7 +386,7 @@ with chat_container:
         # Show welcome placeholder
         st.markdown("""
         <div class="welcome-box">
-            <h3>👋 Welcome to DocMind</h3>
+            <h3> Welcome to DocMind</h3>
             <p>Upload your PDFs using the sidebar, then ask a question below.<br>
             Your answers will be grounded in the documents you provide.</p>
             <p style="margin-top:1rem; font-size:0.85rem; opacity:0.7">
@@ -455,7 +455,7 @@ if question:
                 # Store as plain error message, not a GroundedAnswer
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": f"⚠️ Generation failed: {e}",
+                    "content": f" Generation failed: {e}",
                     "sources": [],
                     "is_grounded": False,
                 })
