@@ -37,7 +37,7 @@ from ingestion.loader import load_pdf
 from ingestion.chunker import chunk_documents
 from ingestion.embedder import embed_and_store, get_collection_count
 from retrieval.retriever import retrieve_reranked
-from generation.llm_chain import generate_answer
+from generation.llm_chain import generate_answer, GroundedAnswer
 from utils.exceptions import (
     DocumentLoadError,
     EmptyDocumentError,
@@ -356,18 +356,27 @@ st.markdown("""
 
 
 # ── Chat History Display ──────────────────────────────────────────────────────
-def _render_sources(sources: list[dict]) -> str:
-    """Render source badge HTML for one assistant message."""
+def _render_sources(sources: list[dict], is_grounded: bool = True) -> str:
+    """Render grounding status badge + source citation badges."""
+    if not sources and not is_grounded:
+        # Model said I don't know — show status only
+        return '<div class="sources-container"><span class="source-badge" style="border-color:rgba(248,81,73,0.4);color:#f85149">❓ Not found in documents</span></div>'
+
     if not sources:
         return ""
-    badges = "".join(
+
+    grounding_badge = (
+        '<span class="source-badge" style="border-color:rgba(63,185,80,0.4);color:#3fb950">🔒 Grounded</span>'
+        if is_grounded else
+        '<span class="source-badge" style="border-color:rgba(248,81,73,0.4);color:#f85149">❓ Not found</span>'
+    )
+    source_badges = "".join(
         f'<span class="source-badge">📄 {s["source_file"]} '
         f'p.{s["page_number"]} '
-        # Show rerank_score if available (more accurate), else cosine score
-        f'<span class="source-score">{s.get("rerank_score", s["score"]):.2f}</span></span>'
+        f'<span class="source-score">{s.get("rerank_score", s.get("score", 0)):.2f}</span></span>'
         for s in sources
     )
-    return f'<div class="sources-container">{badges}</div>'
+    return f'<div class="sources-container">{grounding_badge}{source_badges}</div>'
 
 
 chat_container = st.container()
@@ -395,7 +404,9 @@ with chat_container:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                sources_html = _render_sources(msg.get("sources", []))
+                msg_sources = msg.get("sources", [])
+                msg_grounded = msg.get("is_grounded", True)
+                sources_html = _render_sources(msg_sources, msg_grounded)
                 st.markdown(f"""
                 <div class="chat-message">
                     <div class="chat-avatar assist-avatar">🧠</div>
@@ -405,6 +416,17 @@ with chat_container:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+                # Show expandable citation cards for cited chunks
+                if msg_sources and msg_grounded:
+                    with st.expander(f"📚 View {len(msg_sources)} cited excerpt(s)", expanded=False):
+                        for i, src in enumerate(msg_sources, 1):
+                            st.markdown(
+                                f"**Excerpt {i}** — `{src['source_file']}`, Page {src['page_number']}  "
+                                f"*(rerank score: {src.get('rerank_score', src.get('score', 0)):.3f})*"
+                            )
+                            st.caption(src.get("text", "")[:500] + ("..." if len(src.get("text","")) > 500 else ""))
+                            if i < len(msg_sources):
+                                st.divider()
 
 
 # ── Chat Input ────────────────────────────────────────────────────────────────
@@ -426,28 +448,46 @@ if question:
             chunks = []
 
     if chunks:
-        with st.spinner("✍️ Generating answer..."):
+        with st.spinner("✍️ Generating grounded answer..."):
             try:
-                answer = generate_answer(question, chunks)
+                grounded: GroundedAnswer = generate_answer(question, chunks)
             except GenerationError as e:
-                answer = f"⚠️ Generation failed: {e}"
+                # Store as plain error message, not a GroundedAnswer
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": f"⚠️ Generation failed: {e}",
+                    "sources": [],
+                    "is_grounded": False,
+                })
+                st.rerun()
 
-        # Attach top sources to the assistant message
+        # Build the sources list from GroundedAnswer.citations
+        # Citations already have text, source_file, page_number, rerank_score
         sources = [
-            {"source_file": c["source_file"],
-             "page_number": c["page_number"],
-             "score": c["score"]}
-            for c in chunks[:3]  # show top 3 sources
+            {
+                "source_file": c["source_file"],
+                "page_number":  c["page_number"],
+                "text":         c.get("text", ""),
+                "rerank_score": c.get("rerank_score", c.get("score", 0)),
+                "score":        c.get("score", 0),
+            }
+            for c in grounded.citations
         ]
+        answer_text  = grounded.answer
+        is_grounded  = grounded.is_grounded
     else:
-        answer = (
-            "I couldn't find relevant information in the knowledge base "
-            "to answer that question."
+        answer_text = (
+            "I don't know based on the provided documents. "
+            "No relevant excerpts were found."
         )
-        sources = []
+        sources     = []
+        is_grounded = False
 
     # 3. Add assistant message and rerun to render it
-    st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": sources}
-    )
+    st.session_state.messages.append({
+        "role":        "assistant",
+        "content":     answer_text,
+        "sources":     sources,
+        "is_grounded": is_grounded,
+    })
     st.rerun()
