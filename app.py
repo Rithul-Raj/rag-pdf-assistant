@@ -7,13 +7,13 @@ PIPELINE (end-to-end):
   1. User uploads PDF(s) in the sidebar
   2. On "Process Documents": load_pdf → chunk_documents → embed_and_store
   3. User types a question in the chat input
-  4. On submit: retrieve(query) → generate_answer(query, chunks) → display
+  4. On submit: retrieve_reranked(query) → generate_answer(query, chunks) → display
 
 STREAMLIT STATE MODEL:
   Streamlit re-runs the entire script on every user interaction.
   `st.session_state` is a dict that persists across re-runs.
   We use it to store:
-    - messages:          Chat history [{role, content, sources}]
+    - messages:          Chat history [{role, content, sources, is_grounded}]
     - processed_files:   Set of filenames already embedded
     - total_chunks:      Running count of chunks in ChromaDB
 
@@ -54,156 +54,264 @@ log = get_logger(__name__)
 # ── Page Configuration ────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="DocMind — RAG Research Assistant",
-    page_icon="🧠",
+    page_icon="D",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ── Design System ─────────────────────────────────────────────────────────────
+# Color palette (4 solid colors + neutrals — nothing more)
+#   BG:       #111318  very dark charcoal, main canvas
+#   SURFACE:  #1a1d24  card/panel backgrounds
+#   BORDER:   #2a2d38  all borders
+#   ACCENT:   #4361ee  one strong blue-indigo, used sparingly
+#   TEXT:     #dde1ee  primary text
+#   MUTED:    #6b7080  secondary / metadata text
+#   OK:       #2e7d52  grounded indicator (solid green, not neon)
+#   WARN:     #8b2e2e  not-found indicator (solid red, not neon)
+# ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* ── Imports ─────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-/* ── Global ──────────────────────────────── */
+/* ── Reset & Base ─────────────────────────────────────────────── */
 html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 15px;
 }
 
-/* ── App Background ──────────────────────── */
 .stApp {
-    background: linear-gradient(135deg, #0d1117 0%, #0d1f2d 50%, #0d1117 100%);
-    color: #e6edf3;
+    background-color: #111318;
+    color: #dde1ee;
 }
 
-/* ── Hero Header ─────────────────────────── */
-.hero-header {
-    background: linear-gradient(135deg, #1a2744 0%, #0e3460 50%, #1a2744 100%);
-    border: 1px solid rgba(88, 166, 255, 0.2);
-    border-radius: 16px;
-    padding: 2rem 2.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
-}
-.hero-header h1 {
-    background: linear-gradient(135deg, #58a6ff, #bf91f3, #58a6ff);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 2.2rem;
-    font-weight: 700;
-    margin: 0;
-    letter-spacing: -0.5px;
-}
-.hero-header p {
-    color: #8b949e;
-    margin: 0.5rem 0 0;
-    font-size: 1rem;
-    font-weight: 400;
-}
-
-/* ── Sidebar ─────────────────────────────── */
+/* ── Sidebar ──────────────────────────────────────────────────── */
 [data-testid="stSidebar"] {
-    background: #161b22 !important;
-    border-right: 1px solid rgba(88,166,255,0.1) !important;
+    background-color: #0e1015 !important;
+    border-right: 1px solid #2a2d38 !important;
 }
+
 [data-testid="stSidebar"] .stMarkdown h2 {
-    color: #58a6ff;
-    font-size: 1rem;
+    color: #6b7080;
+    font-size: 0.7rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
+    margin-bottom: 0.6rem;
 }
 
-/* ── Status Card ─────────────────────────── */
-.status-card {
-    background: rgba(22, 27, 34, 0.8);
-    border: 1px solid rgba(88,166,255,0.2);
-    border-radius: 10px;
-    padding: 0.8rem 1.1rem;
-    margin: 0.5rem 0;
+/* ── Sidebar buttons ──────────────────────────────────────────── */
+[data-testid="stSidebar"] .stButton > button {
+    background-color: #4361ee;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
     font-size: 0.88rem;
-    color: #8b949e;
+    letter-spacing: 0.01em;
+    padding: 0.55rem 1rem;
+    transition: background-color 0.15s ease;
 }
-.status-card strong { color: #58a6ff; }
+[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: #3451d1;
+}
+[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+    background-color: transparent;
+    color: #6b7080;
+    border: 1px solid #2a2d38;
+}
+[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+    border-color: #4361ee;
+    color: #dde1ee;
+}
 
-/* ── Chat Messages ───────────────────────── */
-.chat-message {
+/* ── Metrics ──────────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+}
+[data-testid="stMetricLabel"] { color: #6b7080; font-size: 0.78rem; }
+[data-testid="stMetricValue"] { color: #dde1ee; font-size: 1.4rem; font-weight: 600; }
+
+/* ── Slider ───────────────────────────────────────────────────── */
+[data-testid="stSlider"] > div > div > div > div {
+    background-color: #4361ee;
+}
+
+/* ── File uploader ────────────────────────────────────────────── */
+[data-testid="stFileUploader"] {
+    border: 1px dashed #2a2d38;
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+/* ── Page header ──────────────────────────────────────────────── */
+.page-header {
+    padding: 1.4rem 0 1rem;
+    border-bottom: 1px solid #2a2d38;
+    margin-bottom: 1.4rem;
+}
+.page-header h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #dde1ee;
+    margin: 0;
+    letter-spacing: -0.2px;
+}
+.page-header p {
+    color: #6b7080;
+    font-size: 0.85rem;
+    margin: 0.3rem 0 0;
+}
+
+/* ── Chat message rows ────────────────────────────────────────── */
+.chat-row {
     display: flex;
-    gap: 0.75rem;
-    margin: 1rem 0;
+    gap: 0.65rem;
+    margin: 0.85rem 0;
     align-items: flex-start;
-    animation: fadeIn 0.3s ease;
 }
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
+.chat-row.user-row {
+    flex-direction: row-reverse;
 }
-.chat-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    flex-shrink: 0;
-}
-.user-avatar  { background: linear-gradient(135deg, #1f6feb, #388bfd); }
-.assist-avatar { background: linear-gradient(135deg, #6e40c9, #bf91f3); }
 
+/* ── Sender label ─────────────────────────────────────────────── */
+.sender-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b7080;
+    width: 38px;
+    text-align: center;
+    flex-shrink: 0;
+    padding-top: 0.55rem;
+    line-height: 1.2;
+}
+.user-row .sender-label  { color: #4361ee; }
+.assist-row .sender-label { color: #6b7080; }
+
+/* ── Chat bubbles ─────────────────────────────────────────────── */
 .chat-bubble {
-    border-radius: 12px;
-    padding: 0.9rem 1.2rem;
-    max-width: 85%;
-    line-height: 1.65;
-    font-size: 0.95rem;
+    border-radius: 8px;
+    padding: 0.8rem 1.05rem;
+    max-width: 82%;
+    line-height: 1.7;
+    font-size: 0.92rem;
 }
 .user-bubble {
-    background: linear-gradient(135deg, rgba(31,111,235,0.15), rgba(56,139,253,0.1));
-    border: 1px solid rgba(56,139,253,0.25);
-    color: #e6edf3;
+    background-color: #1c2140;
+    border: 1px solid #2d3260;
+    color: #dde1ee;
 }
 .assist-bubble {
-    background: rgba(22, 27, 34, 0.9);
-    border: 1px solid rgba(110,64,201,0.25);
-    color: #e6edf3;
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    color: #dde1ee;
 }
 
-/* ── Source Citation Cards ───────────────── */
-.sources-container {
-    margin-top: 0.75rem;
+/* ── Source badges ────────────────────────────────────────────── */
+.sources-row {
+    margin-top: 0.6rem;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    align-items: center;
 }
-.source-badge {
-    background: rgba(22,27,34,0.9);
-    border: 1px solid rgba(88,166,255,0.2);
-    border-radius: 6px;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.78rem;
-    color: #58a6ff;
-    cursor: default;
-}
-.source-score {
-    color: #3fb950;
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
     font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    padding: 0.18rem 0.5rem;
+    border: 1px solid;
+}
+.tag-grounded {
+    background-color: #152b1e;
+    border-color: #2e7d52;
+    color: #4caf77;
+}
+.tag-notfound {
+    background-color: #2b1515;
+    border-color: #8b2e2e;
+    color: #e06060;
+}
+.source-chip {
+    display: inline-block;
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 4px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.75rem;
+    color: #8b95b5;
+    font-family: 'JetBrains Mono', monospace;
+}
+.source-chip .score {
+    color: #4361ee;
+    font-weight: 600;
+    margin-left: 0.35rem;
 }
 
-/* ── Welcome Box ─────────────────────────── */
-.welcome-box {
+/* ── Welcome state ────────────────────────────────────────────── */
+.welcome-state {
+    margin: 3.5rem auto;
+    max-width: 500px;
     text-align: center;
-    padding: 3rem 2rem;
-    border-radius: 16px;
-    border: 2px dashed rgba(88,166,255,0.2);
-    color: #8b949e;
+    color: #6b7080;
 }
-.welcome-box h3 { color: #58a6ff; font-size: 1.3rem; margin-bottom: 0.5rem; }
+.welcome-state h2 {
+    color: #dde1ee;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.welcome-state p {
+    font-size: 0.88rem;
+    line-height: 1.7;
+    margin: 0;
+}
+.welcome-hint {
+    display: inline-block;
+    margin-top: 1.2rem;
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 6px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+    color: #6b7080;
+    font-style: italic;
+}
 
-/* ── Hide default Streamlit elements ─────── */
-#MainMenu, footer { visibility: hidden; }
-.block-container { padding-top: 1.5rem !important; }
+/* ── Spinner / input ──────────────────────────────────────────── */
+.stChatInput textarea {
+    background-color: #1a1d24 !important;
+    border: 1px solid #2a2d38 !important;
+    color: #dde1ee !important;
+    border-radius: 8px !important;
+}
+.stChatInput textarea:focus {
+    border-color: #4361ee !important;
+}
+
+/* ── Expander (citation cards) ────────────────────────────────── */
+.streamlit-expanderHeader {
+    background-color: #1a1d24 !important;
+    border: 1px solid #2a2d38 !important;
+    border-radius: 6px !important;
+    color: #6b7080 !important;
+    font-size: 0.82rem !important;
+}
+
+/* ── Dividers ─────────────────────────────────────────────────── */
+hr { border-color: #2a2d38 !important; }
+
+/* ── Hide Streamlit chrome ────────────────────────────────────── */
+#MainMenu, footer, header { visibility: hidden; }
+.block-container { padding-top: 1rem !important; max-width: 860px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -212,7 +320,7 @@ html, body, [class*="css"] {
 def _init_state() -> None:
     """Initialise session state keys that don't yet exist."""
     defaults = {
-        "messages": [],           # [{role, content, sources}]
+        "messages": [],           # [{role, content, sources, is_grounded}]
         "processed_files": set(), # filenames already embedded
         "total_chunks": 0,        # live count from ChromaDB
     }
@@ -266,7 +374,7 @@ def _process_pdf(uploaded_file) -> str:
         count = embed_and_store(chunks)
         st.session_state.processed_files.add(filename)
         _refresh_chunk_count()
-        return f"✅ **{filename}**: {len(pages)} pages → {count} chunks embedded"
+        return f"**{filename}** — {len(pages)} pages, {count} chunks indexed"
     finally:
         # Always delete the temp file, even if processing failed.
         Path(tmp_path).unlink(missing_ok=True)
@@ -276,7 +384,7 @@ def _process_pdf(uploaded_file) -> str:
 # SIDEBAR
 # ════════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 📄 Documents")
+    st.markdown("## Documents")
 
     uploaded_files = st.file_uploader(
         "Upload PDF files",
@@ -286,7 +394,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    if st.button("⚡ Process Documents", type="primary", use_container_width=True,
+    if st.button("Process Documents", type="primary", use_container_width=True,
                  disabled=not uploaded_files):
         new_files = [
             f for f in uploaded_files
@@ -301,16 +409,16 @@ with st.sidebar:
                         msg = _process_pdf(f)
                         st.success(msg)
                     except EmptyDocumentError as e:
-                        st.error(f"📭 **{f.name}**: {e}")
+                        st.error(f"**{f.name}** — empty document: {e}")
                     except DocumentLoadError as e:
-                        st.error(f"⚠️ **{f.name}**: {e}")
+                        st.error(f"**{f.name}** — load error: {e}")
                     except (EmbeddingError, VectorStoreError) as e:
-                        st.error(f"🗄️ **{f.name}**: {e}")
+                        st.error(f"**{f.name}** — storage error: {e}")
 
     st.divider()
 
     # ── Knowledge Base Status ─────────────────────────────────────────────────
-    st.markdown("## 🗄️ Knowledge Base")
+    st.markdown("## Knowledge Base")
     n_docs = len(st.session_state.processed_files)
     n_chunks = st.session_state.total_chunks
 
@@ -319,25 +427,30 @@ with st.sidebar:
     col2.metric("Chunks", n_chunks)
 
     if st.session_state.processed_files:
-        st.markdown("**Loaded files:**")
+        st.markdown("**Indexed files**")
         for fname in sorted(st.session_state.processed_files):
-            st.markdown(f"- 📄 {fname}")
+            st.markdown(
+                f'<div style="font-size:0.8rem;color:#6b7080;padding:0.15rem 0;'
+                f'font-family:\'JetBrains Mono\',monospace;word-break:break-all;">'
+                f'{fname}</div>',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 
     # ── Retrieval Settings ────────────────────────────────────────────────────
-    st.markdown("##  Settings")
+    st.markdown("## Settings")
     top_k = st.slider(
-        "Results to retrieve (top-k)",
+        "Results to retrieve",
         min_value=1, max_value=10, value=5,
-        help="How many document chunks to retrieve per question. "
-             "More = richer context but slower. Try 3–7 for best results.",
+        help="Number of document chunks retrieved per question. "
+             "Higher = more context, slightly slower. Recommended: 3–5.",
     )
 
     st.divider()
 
-    # ── Clear chat button ─────────────────────────────────────────────────────
-    if st.button(" Clear Chat History", use_container_width=True):
+    # ── Clear chat ────────────────────────────────────────────────────────────
+    if st.button("Clear conversation", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -346,85 +459,91 @@ with st.sidebar:
 # MAIN AREA
 # ════════════════════════════════════════════════════════════════════════════════
 
-# Hero header
+# Page header — plain text, no decoration
 st.markdown("""
-<div class="hero-header">
-    <h1>🧠 DocMind — Research Assistant</h1>
-    <p>Upload PDFs and ask questions. Answers are grounded in your documents.</p>
+<div class="page-header">
+    <h1>DocMind</h1>
+    <p>Ask questions about your documents. Answers are sourced and verifiable.</p>
 </div>
 """, unsafe_allow_html=True)
 
 
 # ── Chat History Display ──────────────────────────────────────────────────────
 def _render_sources(sources: list[dict], is_grounded: bool = True) -> str:
-    """Render grounding status badge + source citation badges."""
-    if not sources and not is_grounded:
-        # Model said I don't know — show status only
-        return '<div class="sources-container"><span class="source-badge" style="border-color:rgba(248,81,73,0.4);color:#f85149">❓ Not found in documents</span></div>'
+    """Render grounding tag + source chips. No emoji — text labels only."""
+    parts = []
 
-    if not sources:
+    if is_grounded and sources:
+        parts.append('<span class="tag tag-grounded">verified</span>')
+    elif not is_grounded:
+        parts.append('<span class="tag tag-notfound">not in documents</span>')
+
+    for s in sources:
+        score = s.get("rerank_score", s.get("score", 0))
+        parts.append(
+            f'<span class="source-chip">'
+            f'{s["source_file"]} &middot; p.{s["page_number"]}'
+            f'<span class="score">{score:.2f}</span>'
+            f'</span>'
+        )
+
+    if not parts:
         return ""
-
-    grounding_badge = (
-        '<span class="source-badge" style="border-color:rgba(63,185,80,0.4);color:#3fb950">🔒 Grounded</span>'
-        if is_grounded else
-        '<span class="source-badge" style="border-color:rgba(248,81,73,0.4);color:#f85149">❓ Not found</span>'
-    )
-    source_badges = "".join(
-        f'<span class="source-badge">📄 {s["source_file"]} '
-        f'p.{s["page_number"]} '
-        f'<span class="source-score">{s.get("rerank_score", s.get("score", 0)):.2f}</span></span>'
-        for s in sources
-    )
-    return f'<div class="sources-container">{grounding_badge}{source_badges}</div>'
+    return f'<div class="sources-row">{"".join(parts)}</div>'
 
 
 chat_container = st.container()
 
 with chat_container:
     if not st.session_state.messages:
-        # Show welcome placeholder
         st.markdown("""
-        <div class="welcome-box">
-            <h3> Welcome to DocMind</h3>
-            <p>Upload your PDFs using the sidebar, then ask a question below.<br>
-            Your answers will be grounded in the documents you provide.</p>
-            <p style="margin-top:1rem; font-size:0.85rem; opacity:0.7">
-            💡 Try: "Summarise the key findings" or "What does the paper say about X?"
-            </p>
+        <div class="welcome-state">
+            <h2>No conversation yet</h2>
+            <p>Upload a PDF using the sidebar, click <strong>Process Documents</strong>,
+            then type your question below.</p>
+            <span class="welcome-hint">Try: "What is the main argument of this paper?"</span>
         </div>
         """, unsafe_allow_html=True)
     else:
         for msg in st.session_state.messages:
             if msg["role"] == "user":
                 st.markdown(f"""
-                <div class="chat-message">
-                    <div class="chat-avatar user-avatar">👤</div>
+                <div class="chat-row user-row">
+                    <span class="sender-label">You</span>
                     <div class="chat-bubble user-bubble">{msg["content"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                msg_sources = msg.get("sources", [])
+                msg_sources  = msg.get("sources", [])
                 msg_grounded = msg.get("is_grounded", True)
                 sources_html = _render_sources(msg_sources, msg_grounded)
                 st.markdown(f"""
-                <div class="chat-message">
-                    <div class="chat-avatar assist-avatar">🧠</div>
+                <div class="chat-row assist-row">
+                    <span class="sender-label">RAG</span>
                     <div class="chat-bubble assist-bubble">
                         {msg["content"]}
                         {sources_html}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-                # Show expandable citation cards for cited chunks
+
+                # Expandable citation cards — plain text, no emoji
                 if msg_sources and msg_grounded:
-                    with st.expander(f"📚 View {len(msg_sources)} cited excerpt(s)", expanded=False):
+                    with st.expander(
+                        f"View {len(msg_sources)} source excerpt(s)", expanded=False
+                    ):
                         for i, src in enumerate(msg_sources, 1):
+                            score = src.get("rerank_score", src.get("score", 0))
                             st.markdown(
-                                f"**Excerpt {i}** — `{src['source_file']}`, Page {src['page_number']}  "
-                                f"*(rerank score: {src.get('rerank_score', src.get('score', 0)):.3f})*"
+                                f"**Excerpt {i}** &nbsp;·&nbsp; "
+                                f"`{src['source_file']}` &nbsp;·&nbsp; "
+                                f"Page {src['page_number']} &nbsp;·&nbsp; "
+                                f"score: `{score:.3f}`"
                             )
-                            st.caption(src.get("text", "")[:500] + ("..." if len(src.get("text","")) > 500 else ""))
+                            text = src.get("text", "")
+                            st.caption(
+                                text[:500] + ("..." if len(text) > 500 else "")
+                            )
                             if i < len(msg_sources):
                                 st.divider()
 
@@ -440,7 +559,7 @@ if question:
     st.session_state.messages.append({"role": "user", "content": question})
 
     # 2. Retrieve → Generate
-    with st.spinner("🔍 Searching and ranking your documents..."):
+    with st.spinner("Searching documents..."):
         try:
             chunks = retrieve_reranked(question, top_n=top_k)
         except (RetrievalError, RerankingError) as e:
@@ -448,14 +567,14 @@ if question:
             chunks = []
 
     if chunks:
-        with st.spinner("✍️ Generating grounded answer..."):
+        with st.spinner("Generating answer..."):
             try:
                 grounded: GroundedAnswer = generate_answer(question, chunks)
             except GenerationError as e:
-                # Store as plain error message, not a GroundedAnswer
+                # Store error as assistant message
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": f" Generation failed: {e}",
+                    "content": f"Generation failed: {e}",
                     "sources": [],
                     "is_grounded": False,
                 })
@@ -473,8 +592,8 @@ if question:
             }
             for c in grounded.citations
         ]
-        answer_text  = grounded.answer
-        is_grounded  = grounded.is_grounded
+        answer_text = grounded.answer
+        is_grounded = grounded.is_grounded
     else:
         answer_text = (
             "I don't know based on the provided documents. "
