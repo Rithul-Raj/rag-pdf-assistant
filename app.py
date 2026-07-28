@@ -36,7 +36,7 @@ import streamlit as st
 from ingestion.loader import load_pdf
 from ingestion.chunker import chunk_documents
 from ingestion.embedder import embed_and_store, get_collection_count
-from retrieval.retriever import retrieve_hybrid
+from retrieval.retriever import retrieve_reranked
 from generation.llm_chain import generate_answer
 from utils.exceptions import (
     DocumentLoadError,
@@ -44,6 +44,7 @@ from utils.exceptions import (
     EmbeddingError,
     VectorStoreError,
     RetrievalError,
+    RerankingError,
     GenerationError,
 )
 from utils.logger import get_logger
@@ -362,7 +363,8 @@ def _render_sources(sources: list[dict]) -> str:
     badges = "".join(
         f'<span class="source-badge">📄 {s["source_file"]} '
         f'p.{s["page_number"]} '
-        f'<span class="source-score">{s["score"]:.0%}</span></span>'
+        # Show rerank_score if available (more accurate), else cosine score
+        f'<span class="source-score">{s.get("rerank_score", s["score"]):.2f}</span></span>'
         for s in sources
     )
     return f'<div class="sources-container">{badges}</div>'
@@ -416,10 +418,10 @@ if question:
     st.session_state.messages.append({"role": "user", "content": question})
 
     # 2. Retrieve → Generate
-    with st.spinner("🔍 Searching your documents..."):
+    with st.spinner("🔍 Searching and ranking your documents..."):
         try:
-            chunks = retrieve_hybrid(question, top_k=top_k)
-        except RetrievalError as e:
+            chunks = retrieve_reranked(question, top_n=top_k)
+        except (RetrievalError, RerankingError) as e:
             st.error(f"Retrieval failed: {e}")
             chunks = []
 

@@ -118,6 +118,21 @@ class RetrievalError(RagBaseError):
     """
 
 
+class RerankingError(RagBaseError):
+    """
+    Raised when the cross-encoder reranker fails.
+
+    Kept separate from RetrievalError so the UI can tell the user:
+    "Search worked, but the precision ranking step failed" — allowing
+    a graceful fallback to the un-reranked hybrid results.
+
+    Typical causes:
+      - Cross-encoder model download failed (first run, no internet)
+      - Input pair exceeds max_length and truncation caused issues
+      - Out-of-memory error on very constrained hardware
+    """
+
+
 # ── Generation Layer ─────────────────────────────────────────────────────────
 
 class GenerationError(RagBaseError):

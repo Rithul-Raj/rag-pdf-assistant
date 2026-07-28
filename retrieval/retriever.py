@@ -64,7 +64,7 @@ from rank_bm25 import BM25Okapi
 
 from ingestion.embedder import query_similar, get_all_chunks
 from utils.config import config
-from utils.exceptions import RetrievalError
+from utils.exceptions import RetrievalError, RerankingError
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -326,8 +326,70 @@ def retrieve_hybrid(query: str, top_k: int | None = None) -> List[dict]:
     log.info("Hybrid retrieved %d chunks (RRF fused).", len(fused))
     return fused
 
+def retrieve_reranked(
+    query: str,
+    top_k: int | None = None,
+    top_n: int | None = None,
+) -> List[dict]:
+    """
+    Full 3-stage retrieval: hybrid (BM25+dense) → cross-encoder reranking.
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
+    This is the highest-quality retrieval function. Use it in production.
+    For RAGAS baseline evaluation, compare against retrieve() (dense only).
+
+    STAGE BREAKDOWN:
+      Stage 1 — Hybrid BM25+dense with RRF: retrieves top_k × 3 candidates
+                (wider net than hybrid alone so the reranker has more to work with)
+      Stage 2 — Cross-encoder reranking: re-scores all candidates and
+                returns only the top_n most relevant
+
+    GRACEFUL DEGRADATION:
+      If the reranker fails (network error, OOM, etc.), the function logs
+      a warning and falls back to the hybrid results. The user still gets
+      an answer — just with slightly less precise ranking.
+
+    Args:
+        query:  The user's question.
+        top_k:  Candidates to fetch from hybrid retrieval.
+                Defaults to config.top_k × 3 for a wider net.
+        top_n:  Final results after reranking.
+                Defaults to config.rerank_top_n (3).
+
+    Returns:
+        List of top_n result dicts, sorted by rerank_score descending.
+        Each dict has: text, source_file, page_number, chunk_id,
+                       score (cosine), rrf_score, rerank_score.
+
+    Raises:
+        RetrievalError: If the hybrid stage fails (no documents ingested).
+    """
+    from retrieval.reranker import rerank  # local import avoids circular deps
+
+    k = top_k if top_k is not None else (config.top_k * 3)
+    n = top_n if top_n is not None else config.rerank_top_n
+
+    log.info(
+        "Reranked retrieval: query='%s...', candidates=%d, top_n=%d",
+        query[:60], k, n,
+    )
+
+    # Stage 1: Hybrid retrieval — gather candidates
+    candidates = retrieve_hybrid(query, top_k=k)
+    if not candidates:
+        return []
+
+    # Stage 2: Cross-encoder reranking — precision pass
+    try:
+        reranked = rerank(query, candidates, top_n=n)
+    except RerankingError as exc:
+        # Graceful fallback: reranking failed but hybrid results are still good
+        log.warning(
+            "Cross-encoder reranking failed, falling back to hybrid results: %s", exc
+        )
+        return candidates[:n]
+
+    return reranked
+
 
 def _parse_chroma_results(raw: dict) -> List[dict]:
     """

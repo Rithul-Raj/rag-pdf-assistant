@@ -134,6 +134,14 @@ class Config:
     rerank_top_n: int = field(
         default_factory=lambda: int(os.getenv("RERANK_TOP_N", "3"))
     )
+    # Cross-encoder model for reranking — trained on MS MARCO passage ranking.
+    # ms-marco-MiniLM-L-6-v2: ~85 MB, runs on CPU, excellent quality.
+    # Larger option: cross-encoder/ms-marco-electra-base (~440 MB, slower, better)
+    rerank_model: str = field(
+        default_factory=lambda: os.getenv(
+            "RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"
+        )
+    )
 
     # ── Generation ────────────────────────────────────────────────────────────
     # Temperature=0 means fully deterministic — same question always gets
@@ -190,6 +198,11 @@ class Config:
         if self.top_k <= 0:
             raise ConfigError(
                 f"TOP_K must be a positive integer, got {self.top_k}"
+            )
+
+        if self.rerank_top_n <= 0:
+            raise ConfigError(
+                f"RERANK_TOP_N must be a positive integer, got {self.rerank_top_n}"
             )
 
 
