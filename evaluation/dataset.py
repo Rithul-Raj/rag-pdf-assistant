@@ -33,6 +33,7 @@ from typing import List
 # Questions about deep learning / neural networks topics.
 # Adjust these to match the content of the PDFs you actually have.
 EVAL_QUESTIONS: List[dict] = [
+    # ── Regularisation (high probability in DL Unit 2) ────────────────────────
     {
         "question": "What is dropout and why is it used in neural networks?",
         "category": "definition",
@@ -44,33 +45,42 @@ EVAL_QUESTIONS: List[dict] = [
         "expected_type": "comparison of two concepts",
     },
     {
+        "question": "What is overfitting and how can it be prevented?",
+        "category": "definition",
+        "expected_type": "definition + prevention strategies",
+    },
+    # ── Optimisation ──────────────────────────────────────────────────────────
+    {
         "question": "How does backpropagation compute gradients?",
         "category": "mechanism",
         "expected_type": "step-by-step explanation",
-    },
-    {
-        "question": "What is batch normalization and what problem does it solve?",
-        "category": "definition",
-        "expected_type": "definition + problem solved",
     },
     {
         "question": "What is the vanishing gradient problem?",
         "category": "definition",
         "expected_type": "definition + cause",
     },
+    # ── Architecture ──────────────────────────────────────────────────────────
+    {
+        "question": "What is batch normalization and what problem does it solve?",
+        "category": "definition",
+        "expected_type": "definition + problem solved",
+    },
+    {
+        "question": "What are activation functions and why are they important?",
+        "category": "definition",
+        "expected_type": "definition + importance",
+    },
     {
         "question": "How does the Adam optimizer differ from standard gradient descent?",
         "category": "comparison",
         "expected_type": "comparison of optimizers",
     },
-    {
-        "question": "What is a convolutional neural network used for?",
-        "category": "application",
-        "expected_type": "application domain",
-    },
-    {
-        "question": "What is overfitting and how can it be prevented?",
-        "category": "definition",
-        "expected_type": "definition + prevention strategies",
-    },
 ]
+
+# ── TIP FOR BETTER SCORES ─────────────────────────────────────────────────────
+# Open your PDF, pick 8 questions where you can SEE the answer in the document.
+# Those questions will score 0.8+ and give you honest, high eval numbers.
+# Example: if your PDF has a section on "Dropout", write that exact question.
+# Generic questions about topics NOT in the PDF will score near 0.
+
