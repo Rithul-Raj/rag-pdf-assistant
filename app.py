@@ -309,6 +309,64 @@ html, body, [class*="css"] {
 /* ── Dividers ─────────────────────────────────────────────────── */
 hr { border-color: #2a2d38 !important; }
 
+/* ── Native st.chat_message styling ──────────────────────────── */
+/* Streamlit renders chat messages as [data-testid="stChatMessage"].
+   We style them here so they match the design system instead of
+   using Streamlit's default avatar-based bubbles. */
+[data-testid="stChatMessage"] {
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin: 0.6rem 0;
+    gap: 0.65rem;
+}
+/* Remove the default avatar circle */
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"],
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] {
+    display: none !important;
+}
+/* Tighter line height and font for answer text */
+[data-testid="stChatMessage"] p {
+    line-height: 1.75;
+    margin-bottom: 0.5rem;
+    font-size: 0.93rem;
+    color: #dde1ee;
+}
+/* Bullet and numbered list spacing */
+[data-testid="stChatMessage"] ul,
+[data-testid="stChatMessage"] ol {
+    padding-left: 1.3rem;
+    margin: 0.4rem 0 0.7rem;
+}
+[data-testid="stChatMessage"] li {
+    line-height: 1.7;
+    margin-bottom: 0.25rem;
+    color: #dde1ee;
+    font-size: 0.93rem;
+}
+/* Bold terms */
+[data-testid="stChatMessage"] strong {
+    color: #c5cbdf;
+    font-weight: 600;
+}
+/* User message — slightly different background */
+[data-testid="stChatMessage"]:has(.user-label) {
+    background-color: #1c2140;
+    border-color: #2d3260;
+}
+/* Sender label inside chat message */
+.msg-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+    display: block;
+}
+.msg-label.user-label  { color: #4361ee; }
+.msg-label.rag-label   { color: #6b7080; }
+
 /* ── Hide Streamlit chrome ────────────────────────────────────── */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding-top: 1rem !important; max-width: 860px; }
@@ -501,51 +559,59 @@ with chat_container:
             <h2>No conversation yet</h2>
             <p>Upload a PDF using the sidebar, click <strong>Process Documents</strong>,
             then type your question below.</p>
-            <span class="welcome-hint">Try: "What is the main argument of this paper?"</span>
+            <span class="welcome-hint">Try: &ldquo;What is the main argument of this paper?&rdquo;</span>
         </div>
         """, unsafe_allow_html=True)
     else:
         for msg in st.session_state.messages:
             if msg["role"] == "user":
-                st.markdown(f"""
-                <div class="chat-row user-row">
-                    <span class="sender-label">You</span>
-                    <div class="chat-bubble user-bubble">{msg["content"]}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                # Use st.chat_message so markdown is processed natively.
+                # The sender label is a small HTML span above the text.
+                with st.chat_message("user", avatar=None):
+                    st.markdown(
+                        '<span class="msg-label user-label">You</span>',
+                        unsafe_allow_html=True,
+                    )
+                    # st.markdown renders the text — bold, bullets, etc. work here
+                    st.markdown(msg["content"])
             else:
                 msg_sources  = msg.get("sources", [])
                 msg_grounded = msg.get("is_grounded", True)
                 sources_html = _render_sources(msg_sources, msg_grounded)
-                st.markdown(f"""
-                <div class="chat-row assist-row">
-                    <span class="sender-label">RAG</span>
-                    <div class="chat-bubble assist-bubble">
-                        {msg["content"]}
-                        {sources_html}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
 
-                # Expandable citation cards — plain text, no emoji
-                if msg_sources and msg_grounded:
-                    with st.expander(
-                        f"View {len(msg_sources)} source excerpt(s)", expanded=False
-                    ):
-                        for i, src in enumerate(msg_sources, 1):
-                            score = src.get("rerank_score", src.get("score", 0))
-                            st.markdown(
-                                f"**Excerpt {i}** &nbsp;·&nbsp; "
-                                f"`{src['source_file']}` &nbsp;·&nbsp; "
-                                f"Page {src['page_number']} &nbsp;·&nbsp; "
-                                f"score: `{score:.3f}`"
-                            )
-                            text = src.get("text", "")
-                            st.caption(
-                                text[:500] + ("..." if len(text) > 500 else "")
-                            )
-                            if i < len(msg_sources):
-                                st.divider()
+                with st.chat_message("assistant", avatar=None):
+                    st.markdown(
+                        '<span class="msg-label rag-label">DocMind</span>',
+                        unsafe_allow_html=True,
+                    )
+                    # KEY FIX: st.markdown() processes the LLM's markdown output.
+                    # Before this change, the text was injected as raw HTML content,
+                    # so **bold** showed as "**bold**" and - bullets stayed literal.
+                    st.markdown(msg["content"])
+
+                    # Source badges below the answer text
+                    if sources_html:
+                        st.markdown(sources_html, unsafe_allow_html=True)
+
+                    # Expandable citation cards
+                    if msg_sources and msg_grounded:
+                        with st.expander(
+                            f"View {len(msg_sources)} source excerpt(s)", expanded=False
+                        ):
+                            for i, src in enumerate(msg_sources, 1):
+                                score = src.get("rerank_score", src.get("score", 0))
+                                st.markdown(
+                                    f"**Excerpt {i}** &nbsp;&middot;&nbsp; "
+                                    f"`{src['source_file']}` &nbsp;&middot;&nbsp; "
+                                    f"Page {src['page_number']} &nbsp;&middot;&nbsp; "
+                                    f"score: `{score:.3f}`"
+                                )
+                                text = src.get("text", "")
+                                st.caption(
+                                    text[:500] + ("..." if len(text) > 500 else "")
+                                )
+                                if i < len(msg_sources):
+                                    st.divider()
 
 
 # ── Chat Input ────────────────────────────────────────────────────────────────

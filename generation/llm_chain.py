@@ -139,7 +139,13 @@ STRICT RULES (follow all of them):
    "I don't know based on the provided documents."
 4. Do NOT add knowledge from outside the excerpts — no training data, no general knowledge.
 5. Do NOT speculate or infer beyond what is explicitly stated.
-6. Be concise: answer in 3-5 sentences unless the question requires more detail."""
+6. FORMAT your answer for easy reading:
+   - Start with one short sentence that directly answers the question.
+   - Use **bold** to highlight the key term or concept being defined.
+   - Use bullet points (- item) whenever listing 3 or more things.
+   - Use numbered steps (1. 2. 3.) for sequential processes or procedures.
+   - Keep each paragraph to 2-3 sentences maximum.
+   - Do NOT use section headers (##) — keep the answer conversational."""
 
 _CONTEXT_TEMPLATE = """Document Excerpts:
 {context}
