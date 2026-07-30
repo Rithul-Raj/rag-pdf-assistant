@@ -8,8 +8,7 @@ Built from scratch as a learning project demonstrating every layer of a modern R
 
 ## Live Demo
 
-> **[DocMind on Streamlit Cloud →](https://your-app-url.streamlit.app)**  
-> *(Replace with your actual URL after deployment)*
+> **[DocMind on Streamlit Cloud →](https://rag-pdf-assistant-rithul.streamlit.app)**
 
 ---
 
