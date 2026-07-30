@@ -361,6 +361,163 @@ hr { border-color: #2a2d38 !important; }
 
 /* ── Hide Streamlit chrome (desktop) ─────────────────────────── */
 #MainMenu, footer { visibility: hidden; }
+
+/* ── Onboarding / Upload banner ──────────────────────────────── */
+@keyframes pulse-ring {
+    0%   { transform: scale(1);   opacity: 1; }
+    70%  { transform: scale(1.55); opacity: 0; }
+    100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes bounce-left {
+    0%, 100% { transform: translateX(0); }
+    50%       { transform: translateX(-5px); }
+}
+.upload-banner {
+    background: linear-gradient(135deg, #1a1f35 0%, #1a1d24 100%);
+    border: 1px solid #2d3260;
+    border-left: 4px solid #4361ee;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.upload-banner-icon {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+}
+.upload-banner-icon .dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #4361ee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: white;
+    position: relative;
+    z-index: 2;
+}
+.upload-banner-icon .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid #4361ee;
+    animation: pulse-ring 1.6s ease-out infinite;
+}
+.upload-banner-text strong {
+    display: block;
+    color: #dde1ee;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+.upload-banner-text span {
+    color: #6b7080;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+.upload-banner-arrow {
+    margin-left: auto;
+    color: #4361ee;
+    font-size: 1.3rem;
+    animation: bounce-left 1.2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+/* Onboarding steps card */
+.onboard-card {
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 12px;
+    padding: 1.8rem 1.6rem;
+    margin: 1.5rem auto;
+    max-width: 520px;
+}
+.onboard-card h2 {
+    color: #dde1ee;
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.2px;
+}
+.onboard-card .subtitle {
+    color: #6b7080;
+    font-size: 0.85rem;
+    margin: 0 0 1.4rem;
+    line-height: 1.5;
+}
+.onboard-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+.onboard-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    background-color: #111318;
+    border: 1px solid #2a2d38;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.15s;
+}
+.step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background-color: #4361ee;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+.step-body strong {
+    display: block;
+    color: #dde1ee;
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+.step-body span {
+    color: #6b7080;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+.step-body code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    background-color: #1a1d24;
+    border: 1px solid #2a2d38;
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    color: #8b95b5;
+}
+.onboard-hint {
+    margin-top: 1.2rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6b7080;
+    font-style: italic;
+}
+@media (max-width: 768px) {
+    .onboard-card {
+        max-width: 100%;
+        padding: 1.2rem 1rem;
+        margin: 0.8rem auto;
+    }
+    .onboard-card h2 { font-size: 1rem; }
+    .upload-banner { padding: 0.8rem 0.9rem; gap: 0.75rem; }
+    .upload-banner-text strong { font-size: 0.86rem; }
+    .upload-banner-text span { font-size: 0.76rem; }
+}
 /* Hide header on desktop — it's just clutter there */
 @media (min-width: 769px) {
     header { visibility: hidden; }
@@ -705,16 +862,65 @@ def _render_sources(sources: list[dict], is_grounded: bool = True) -> str:
     return f'<div class="sources-row">{"".join(parts)}</div>'
 
 
+# ── Floating upload banner (shown whenever no docs are loaded) ────────────────
+# Shown at the top of the main area regardless of chat state.
+# Tells mobile users exactly where to go to upload files.
+if not st.session_state.processed_files:
+    st.markdown("""
+    <div class="upload-banner">
+        <div class="upload-banner-icon">
+            <div class="ring"></div>
+            <div class="dot">&#9776;</div>
+        </div>
+        <div class="upload-banner-text">
+            <strong>No documents uploaded yet</strong>
+            <span>
+                Tap the <b style="color:#dde1ee">&#9776; menu</b> button
+                (top-left) &rarr; upload your PDF &rarr; tap
+                <b style="color:#dde1ee">Process Documents</b>.
+            </span>
+        </div>
+        <div class="upload-banner-arrow">&#8592;</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 chat_container = st.container()
 
 with chat_container:
     if not st.session_state.messages:
         st.markdown("""
-        <div class="welcome-state">
-            <h2>No conversation yet</h2>
-            <p>Upload a PDF using the sidebar, click <strong>Process Documents</strong>,
-            then type your question below.</p>
-            <span class="welcome-hint">Try: &ldquo;What is the main argument of this paper?&rdquo;</span>
+        <div class="onboard-card">
+            <h2>Welcome to DocMind &#128216;</h2>
+            <p class="subtitle">Ask questions about any PDF — every answer is cited
+            directly from your document.</p>
+            <div class="onboard-steps">
+                <div class="onboard-step">
+                    <div class="step-num">1</div>
+                    <div class="step-body">
+                        <strong>Open the sidebar</strong>
+                        <span>Tap the <b style="color:#dde1ee">&#9776;</b> menu icon
+                        in the top-left corner (or the
+                        <b style="color:#dde1ee">&#9654;</b> arrow if sidebar is closed).</span>
+                    </div>
+                </div>
+                <div class="onboard-step">
+                    <div class="step-num">2</div>
+                    <div class="step-body">
+                        <strong>Upload your PDF</strong>
+                        <span>Drag &amp; drop or tap <b style="color:#dde1ee">Browse files</b>
+                        in the sidebar. Multiple PDFs are supported.</span>
+                    </div>
+                </div>
+                <div class="onboard-step">
+                    <div class="step-num">3</div>
+                    <div class="step-body">
+                        <strong>Process &amp; Ask</strong>
+                        <span>Tap <code>Process Documents</code> in the sidebar,
+                        then type any question in the chat box below.</span>
+                    </div>
+                </div>
+            </div>
+            <p class="onboard-hint">Try: &ldquo;What is the main argument of this paper?&rdquo;</p>
         </div>
         """, unsafe_allow_html=True)
     else:
