@@ -194,22 +194,6 @@ html, body, [class*="css"] {
     flex-direction: row-reverse;
 }
 
-/* ── Sender label ─────────────────────────────────────────────── */
-.sender-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #6b7080;
-    width: 38px;
-    text-align: center;
-    flex-shrink: 0;
-    padding-top: 0.55rem;
-    line-height: 1.2;
-}
-.user-row .sender-label  { color: #4361ee; }
-.assist-row .sender-label { color: #6b7080; }
-
 /* ── Chat bubbles ─────────────────────────────────────────────── */
 .chat-bubble {
     border-radius: 8px;
@@ -217,16 +201,6 @@ html, body, [class*="css"] {
     max-width: 82%;
     line-height: 1.7;
     font-size: 0.92rem;
-}
-.user-bubble {
-    background-color: #1c2140;
-    border: 1px solid #2d3260;
-    color: #dde1ee;
-}
-.assist-bubble {
-    background-color: #1a1d24;
-    border: 1px solid #2a2d38;
-    color: #dde1ee;
 }
 
 /* ── Source badges ────────────────────────────────────────────── */
@@ -266,6 +240,7 @@ html, body, [class*="css"] {
     font-size: 0.75rem;
     color: #8b95b5;
     font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
 }
 .source-chip .score {
     color: #4361ee;
@@ -386,9 +361,147 @@ hr { border-color: #2a2d38 !important; }
 
 /* ── Hide Streamlit chrome ────────────────────────────────────── */
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 1rem !important; max-width: 860px; }
+
+/* ── Layout: Desktop (>1024px) ────────────────────────────────── */
+.block-container {
+    padding-top: 1rem !important;
+    max-width: 860px;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
+}
+
+/* ── Responsive: Tablet (≤1024px) ────────────────────────────── */
+@media (max-width: 1024px) {
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+    .chat-bubble { max-width: 88%; }
+    .welcome-state { max-width: 420px; }
+}
+
+/* ── Responsive: Mobile (≤768px) ─────────────────────────────── */
+@media (max-width: 768px) {
+    html, body, [class*="css"] { font-size: 14px; }
+
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 5rem !important;
+    }
+
+    .page-header { padding: 0.8rem 0 0.7rem; margin-bottom: 0.8rem; }
+    .page-header h1 { font-size: 1.1rem; }
+    .page-header p  { font-size: 0.78rem; }
+
+    .chat-bubble {
+        max-width: 96%;
+        font-size: 0.88rem;
+        padding: 0.65rem 0.85rem;
+    }
+    [data-testid="stChatMessage"] {
+        padding: 0.65rem 0.8rem;
+        border-radius: 6px;
+    }
+    [data-testid="stChatMessage"] p  { font-size: 0.88rem; }
+    [data-testid="stChatMessage"] li { font-size: 0.88rem; }
+
+    .source-chip {
+        font-size: 0.68rem;
+        padding: 0.14rem 0.4rem;
+        max-width: 100%;
+        word-break: break-all;
+    }
+    .sources-row { gap: 0.3rem; }
+    .tag { font-size: 0.65rem; padding: 0.14rem 0.4rem; }
+
+    .welcome-state {
+        max-width: 100%;
+        margin: 2rem auto;
+        padding: 0 0.5rem;
+    }
+    .welcome-state h2   { font-size: 1rem; }
+    .welcome-state p    { font-size: 0.82rem; }
+    .welcome-hint {
+        font-size: 0.76rem;
+        padding: 0.4rem 0.7rem;
+        display: block;
+        text-align: center;
+    }
+
+    [data-testid="stMetricValue"] { font-size: 1.15rem; }
+    [data-testid="stMetricLabel"] { font-size: 0.72rem; }
+
+    .msg-label { font-size: 0.62rem; }
+
+    .stChatInput textarea {
+        font-size: 0.9rem !important;
+        min-height: 44px !important;
+    }
+    .streamlit-expanderHeader { font-size: 0.78rem !important; }
+
+    [data-testid="stSidebar"] {
+        min-width: 280px !important;
+        max-width: 85vw !important;
+    }
+    [data-testid="stSidebar"] .stButton > button {
+        font-size: 0.85rem;
+        padding: 0.6rem 0.9rem;
+        min-height: 44px;
+    }
+}
+
+/* ── Responsive: Small Mobile (≤480px) ───────────────────────── */
+@media (max-width: 480px) {
+    html, body, [class*="css"] { font-size: 13px; }
+
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    .page-header h1 { font-size: 1rem; }
+
+    .chat-bubble {
+        max-width: 100%;
+        font-size: 0.85rem;
+        padding: 0.55rem 0.7rem;
+    }
+    .source-chip { font-size: 0.62rem; }
+    .welcome-state h2 { font-size: 0.95rem; }
+    .welcome-state p  { font-size: 0.78rem; }
+
+    /* Stack chips vertically on very small screens */
+    .sources-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ── Overflow prevention on all screens ───────────────────────── */
+img, pre, code, table { max-width: 100%; }
+pre, code {
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+[data-testid="stChatMessage"] pre { overflow-x: auto; max-width: 100%; }
+
+/* ── Touch-friendly tap targets (mobile & tablet) ─────────────── */
+@media (hover: none) and (pointer: coarse) {
+    .stButton > button {
+        min-height: 44px !important;
+        padding-top: 0.6rem !important;
+        padding-bottom: 0.6rem !important;
+    }
+    [data-testid="stFileUploader"] { padding: 0.8rem !important; }
+    [data-testid="stSlider"] input[type="range"] { height: 28px; }
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # ── Session State Initialisation ──────────────────────────────────────────────
