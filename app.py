@@ -359,8 +359,33 @@ hr { border-color: #2a2d38 !important; }
 .msg-label.user-label  { color: #4361ee; }
 .msg-label.rag-label   { color: #6b7080; }
 
-/* ── Hide Streamlit chrome ────────────────────────────────────── */
-#MainMenu, footer, header { visibility: hidden; }
+/* ── Hide Streamlit chrome (desktop) ─────────────────────────── */
+#MainMenu, footer { visibility: hidden; }
+/* Hide header on desktop — it's just clutter there */
+@media (min-width: 769px) {
+    header { visibility: hidden; }
+}
+/* On mobile: show header so the sidebar ▶ toggle is accessible */
+@media (max-width: 768px) {
+    header {
+        visibility: visible !important;
+        background-color: #111318 !important;
+        border-bottom: 1px solid #2a2d38 !important;
+    }
+    /* Hide the deploy / GitHub / top-right action buttons inside the header */
+    header [data-testid="stMainMenu"],
+    header .stDeployButton,
+    header [data-testid="baseButton-header"],
+    header [data-testid="stAppViewBlockContainer"] > div:last-child {
+        display: none !important;
+    }
+}
+/* The ▶ collapsed-control button must ALWAYS be visible on every screen */
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    z-index: 9999 !important;
+}
+
 
 /* ── Layout: Desktop (>1024px) ────────────────────────────────── */
 .block-container {
